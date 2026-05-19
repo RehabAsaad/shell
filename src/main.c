@@ -16,6 +16,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#define HISTORY_MAX 10
+char *history_list[HISTORY_MAX]; 
+int history_count = 0;
 
 /*
   Function Declarations for builtin shell commands:
@@ -23,6 +26,10 @@
 int lsh_cd(char **args);
 int lsh_help(char **args);
 int lsh_exit(char **args);
+int lsh_pwd(char **args);
+int lsh_echo(char **args);
+int lsh_history(char **args);
+int lsh_env(char **args);
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -30,13 +37,21 @@ int lsh_exit(char **args);
 char *builtin_str[] = {
   "cd",
   "help",
-  "exit"
+  "exit",
+  "pwd",
+  "echo", 
+  "history",
+  "env"
 };
 
 int (*builtin_func[]) (char **) = {
   &lsh_cd,
   &lsh_help,
-  &lsh_exit
+  &lsh_exit,
+  &lsh_pwd,
+  &lsh_echo, 
+  &lsh_history, 
+  &lsh_env
 };
 
 int lsh_num_builtins() {
@@ -99,6 +114,45 @@ int lsh_exit(char **args)
   @param args Null terminated list of arguments (including program).
   @return Always returns 1, to continue execution.
  */
+
+int lsh_pwd(char **args)
+{
+  char cwd[1024];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    printf("%s\n", cwd);
+  } else {
+    perror("lsh");
+  }
+  return 1;
+}
+
+
+int lsh_echo(char **args) {
+  int i = 1;
+  while (args[i] != NULL) {
+    printf("%s ", args[i]);
+    i++;
+  }
+  printf("\n");
+  return 1;
+}
+
+
+int lsh_env(char **args) {
+  extern char **environ;
+  for (char **env = environ; *env != 0; env++) {
+    printf("%s\n", *env);
+  }
+  return 1;
+}
+
+int lsh_history(char **args) {
+    for (int i = 0; i < history_count; i++) {
+        printf("%d: %s\n", i + 1, history_list[i]); 
+    }
+    return 1;
+}
+
 int lsh_launch(char **args)
 {
   pid_t pid;
@@ -247,6 +301,19 @@ char **lsh_split_line(char *line)
 /**
    @brief Loop getting input and executing it.
  */
+
+void add_to_history(char *line) {
+    if (history_count < HISTORY_MAX) {
+        history_list[history_count++] = strdup(line);
+    } else {
+        free(history_list[0]);
+        for (int i = 1; i < HISTORY_MAX; i++) {
+            history_list[i-1] = history_list[i];
+        }
+        history_list[HISTORY_MAX-1] = strdup(line);
+    }
+}
+
 void lsh_loop(void)
 {
   char *line;
@@ -256,6 +323,9 @@ void lsh_loop(void)
   do {
     printf("> ");
     line = lsh_read_line();
+    if (line != NULL && line[0] != '\0') {
+        add_to_history(line);
+    }
     args = lsh_split_line(line);
     status = lsh_execute(args);
 
